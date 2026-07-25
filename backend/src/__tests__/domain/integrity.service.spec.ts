@@ -1,4 +1,4 @@
-import { IntegrityService } from './integrity.service';
+import { IntegrityService } from '../../domain/services/integrity.service';
 import { createHash } from 'crypto';
 
 describe('IntegrityService', () => {

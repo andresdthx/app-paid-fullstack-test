@@ -1,4 +1,4 @@
-import { GetProductsUseCase } from './get-products.use-case';
+import { GetProductsUseCase } from '../../application/use-cases/get-products.use-case';
 import { Product } from '../../domain/entities';
 import { isSuccess, isFailure } from '../../domain/value-objects';
 

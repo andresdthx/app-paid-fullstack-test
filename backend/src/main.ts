@@ -1,10 +1,12 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { DEFAULT_PORT, DEFAULT_FRONTEND_URL, API_PREFIX, CORS_METHODS, CORS_HEADERS } from './constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
 
   app.use(
     helmet({
@@ -14,9 +16,9 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: process.env.FRONTEND_URL || DEFAULT_FRONTEND_URL,
+    methods: CORS_METHODS,
+    allowedHeaders: CORS_HEADERS,
   });
 
   app.useGlobalPipes(
@@ -27,11 +29,11 @@ async function bootstrap() {
     }),
   );
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix(API_PREFIX);
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || DEFAULT_PORT;
   await app.listen(port);
-  console.log(`Backend running on port ${port}`);
+  logger.log(`Server running on port ${port}`);
 }
 
 bootstrap();

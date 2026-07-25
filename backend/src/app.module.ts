@@ -4,6 +4,7 @@ import { HttpModule } from '@nestjs/axios';
 // Config
 import { PrismaService } from './infrastructure/config/prisma.service';
 import { RequestLoggerMiddleware } from './infrastructure/config/request-logger.middleware';
+import { AppLogger, APP_LOGGER } from './infrastructure/config/app-logger.service';
 
 // Use Cases
 import {
@@ -52,6 +53,8 @@ import { DeliveryController } from './infrastructure/controllers/delivery.contro
   ],
   providers: [
     PrismaService,
+    // Logger
+    { provide: APP_LOGGER, useFactory: () => new AppLogger('PaymentCheckout') },
     // Repository adapters bound to ports
     { provide: PRODUCT_REPOSITORY_PORT, useClass: PrismaProductRepository },
     { provide: TRANSACTION_REPOSITORY_PORT, useClass: PrismaTransactionRepository },

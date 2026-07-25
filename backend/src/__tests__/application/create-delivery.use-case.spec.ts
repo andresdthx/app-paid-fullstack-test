@@ -1,4 +1,4 @@
-import { CreateDeliveryUseCase } from './create-delivery.use-case';
+import { CreateDeliveryUseCase } from '../../application/use-cases/create-delivery.use-case';
 import { Transaction, TransactionStatus, Delivery } from '../../domain/entities';
 import { isSuccess, isFailure } from '../../domain/value-objects';
 

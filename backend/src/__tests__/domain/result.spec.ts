@@ -1,4 +1,4 @@
-import { success, failure, isSuccess, isFailure } from './result';
+import { success, failure, isSuccess, isFailure } from '../../domain/value-objects/result';
 
 describe('Result', () => {
   describe('success', () => {

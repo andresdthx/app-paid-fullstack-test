@@ -1,4 +1,4 @@
-import { CreateTransactionUseCase } from './create-transaction.use-case';
+import { CreateTransactionUseCase } from '../../application/use-cases/create-transaction.use-case';
 import { Product, TransactionStatus } from '../../domain/entities';
 import { isSuccess, isFailure } from '../../domain/value-objects';
 

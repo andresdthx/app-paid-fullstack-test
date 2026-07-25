@@ -1,4 +1,4 @@
-import { CreateCustomerUseCase } from './create-customer.use-case';
+import { CreateCustomerUseCase } from '../../application/use-cases/create-customer.use-case';
 import { Customer } from '../../domain/entities';
 import { isSuccess, isFailure } from '../../domain/value-objects';
 

@@ -21,6 +21,16 @@ import {
   isFailure,
   AppError,
 } from '../../domain/value-objects';
+import {
+  DEFAULT_CURRENCY,
+  GATEWAY_POLL_MAX_ATTEMPTS,
+  GATEWAY_POLL_INTERVAL_MS,
+  GATEWAY_STATUS_APPROVED,
+  GATEWAY_STATUS_DECLINED,
+  GATEWAY_STATUS_VOIDED,
+  GATEWAY_STATUS_ERROR,
+} from '../../constants';
+import { AppLogger, APP_LOGGER } from '../../infrastructure/config/app-logger.service';
 
 export interface ProcessPaymentInput {
   transactionId: string;
@@ -58,6 +68,8 @@ export class ProcessPaymentUseCase {
     private readonly paymentGateway: PaymentGatewayPort,
     @Inject(INTEGRITY_SERVICE_PORT)
     private readonly integrityService: IntegrityServicePort,
+    @Inject(APP_LOGGER)
+    private readonly logger: AppLogger,
   ) {}
 
   async execute(
@@ -80,13 +92,19 @@ export class ProcessPaymentUseCase {
     const signature = this.integrityService.generateSignature(
       transaction.reference,
       amountInCents,
-      'COP',
+      DEFAULT_CURRENCY,
     );
+
+    this.logger.logOperation('ProcessPayment', 'start', {
+      transactionId: transaction.id,
+      reference: transaction.reference,
+      amountInCents,
+    });
 
     const paymentResult = await this.paymentGateway.createPayment({
       acceptanceToken: input.acceptanceToken,
       amountInCents,
-      currency: 'COP',
+      currency: DEFAULT_CURRENCY,
       customerEmail: input.customerEmail,
       reference: transaction.reference,
       paymentMethodToken: input.cardToken,
@@ -94,6 +112,10 @@ export class ProcessPaymentUseCase {
     });
 
     if (isFailure(paymentResult)) {
+      this.logger.logOperation('ProcessPayment', 'failure', {
+        transactionId: transaction.id,
+        error: paymentResult.error.message,
+      });
       await this.transactionRepo.updateStatus(
         transaction.id,
         TransactionStatus.ERROR,
@@ -107,11 +129,11 @@ export class ProcessPaymentUseCase {
     let finalStatus: TransactionStatus;
     let statusReason: string | undefined;
 
-    if (gatewayStatus.status === 'APPROVED') {
+    if (gatewayStatus.status === GATEWAY_STATUS_APPROVED) {
       finalStatus = TransactionStatus.APPROVED;
     } else if (
-      gatewayStatus.status === 'DECLINED' ||
-      gatewayStatus.status === 'VOIDED'
+      gatewayStatus.status === GATEWAY_STATUS_DECLINED ||
+      gatewayStatus.status === GATEWAY_STATUS_VOIDED
     ) {
       finalStatus = TransactionStatus.DECLINED;
       statusReason = gatewayStatus.status;
@@ -134,7 +156,7 @@ export class ProcessPaymentUseCase {
     const integrityValid = this.integrityService.validateSignature(
       transaction.reference,
       amountInCents,
-      'COP',
+      DEFAULT_CURRENCY,
       signature,
     );
 
@@ -189,6 +211,11 @@ export class ProcessPaymentUseCase {
       });
     }
 
+    this.logger.logOperation('ProcessPayment', 'success', {
+      transactionId: transaction.id,
+      finalStatus,
+    });
+
     return success({
       transactionId: transaction.id,
       reference: transaction.reference,
@@ -199,8 +226,8 @@ export class ProcessPaymentUseCase {
 
   private async pollTransactionStatus(
     gatewayTransactionId: string,
-    maxAttempts = 12,
-    intervalMs = 5000,
+    maxAttempts = GATEWAY_POLL_MAX_ATTEMPTS,
+    intervalMs = GATEWAY_POLL_INTERVAL_MS,
   ): Promise<Result<{ status: TransactionStatus; reason?: string }, AppError>> {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       await this.delay(intervalMs);
@@ -211,16 +238,16 @@ export class ProcessPaymentUseCase {
       }
 
       const { status } = result.value;
-      if (status === 'APPROVED') {
+      if (status === GATEWAY_STATUS_APPROVED) {
         return success({ status: TransactionStatus.APPROVED });
       }
-      if (status === 'DECLINED' || status === 'VOIDED') {
+      if (status === GATEWAY_STATUS_DECLINED || status === GATEWAY_STATUS_VOIDED) {
         return success({
           status: TransactionStatus.DECLINED,
           reason: status,
         });
       }
-      if (status === 'ERROR') {
+      if (status === GATEWAY_STATUS_ERROR) {
         return success({
           status: TransactionStatus.ERROR,
           reason: 'Gateway error',

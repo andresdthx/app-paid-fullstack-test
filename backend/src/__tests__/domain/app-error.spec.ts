@@ -1,4 +1,4 @@
-import { AppError, ErrorCategory } from './app-error';
+import { AppError, ErrorCategory } from '../../domain/value-objects/app-error';
 
 describe('AppError', () => {
   it('should create validation error', () => {
