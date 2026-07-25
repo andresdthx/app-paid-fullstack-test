@@ -3,8 +3,8 @@
 Full-stack payment checkout application with credit card processing, stock management, and delivery tracking. Built with a focus on clean architecture, resilience patterns, and production-grade engineering practices.
 
 **Live Demo:** http://app-paid-frontend-511417.s3-website-us-east-1.amazonaws.com  
-**Backend API:** http://3.92.18.108:3000/api  
-**Health Check:** http://3.92.18.108:3000/api/health
+**Backend API:** http://44.198.164.53:3000/api  
+**Health Check:** http://44.198.164.53:3000/api/health
 
 ---
 
