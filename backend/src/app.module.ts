@@ -4,6 +4,7 @@ import { HttpModule } from '@nestjs/axios';
 // Config
 import { PrismaService } from './infrastructure/config/prisma.service';
 import { RequestLoggerMiddleware } from './infrastructure/config/request-logger.middleware';
+import { CorrelationIdMiddleware } from './infrastructure/config/correlation-id.middleware';
 import { AppLogger, APP_LOGGER } from './infrastructure/config/app-logger.service';
 
 // Use Cases
@@ -77,6 +78,8 @@ import { DeliveryController } from './infrastructure/controllers/delivery.contro
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+    consumer
+      .apply(CorrelationIdMiddleware, RequestLoggerMiddleware)
+      .forRoutes('*');
   }
 }

@@ -1,11 +1,18 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { ResultInterceptor } from './infrastructure/config/result.interceptor';
+import { validateEnvironment } from './infrastructure/config/env.validation';
 import { DEFAULT_PORT, DEFAULT_FRONTEND_URL, API_PREFIX, CORS_METHODS, CORS_HEADERS } from './constants';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  validateEnvironment();
+
+  const app = await NestFactory.create(AppModule, {
+    logger: ['log', 'error', 'warn', 'debug'],
+  });
   const logger = new Logger('Bootstrap');
 
   app.use(
@@ -29,11 +36,12 @@ async function bootstrap() {
     }),
   );
 
+  app.useGlobalInterceptors(new ResultInterceptor());
   app.setGlobalPrefix(API_PREFIX);
 
   const port = process.env.PORT || DEFAULT_PORT;
   await app.listen(port);
-  logger.log(`Server running on port ${port}`);
+  logger.log(`Server running on port ${port} | env: ${process.env.NODE_ENV || 'development'}`);
 }
 
 bootstrap();

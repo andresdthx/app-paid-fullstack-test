@@ -1,18 +1,7 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Param,
-  Body,
-  HttpException,
-  HttpStatus,
-  Inject,
-} from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import { CreateCustomerUseCase } from '../../application/use-cases';
 import { CustomerRepositoryPort, CUSTOMER_REPOSITORY_PORT } from '../../domain/ports';
-import { isFailure } from '../../domain/value-objects';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
-import { mapErrorToHttp } from '../config/error-mapper';
 
 @Controller('customers')
 export class CustomerController {
@@ -24,12 +13,7 @@ export class CustomerController {
 
   @Post()
   async createCustomer(@Body() dto: CreateCustomerDto) {
-    const result = await this.createCustomerUseCase.execute(dto);
-    if (isFailure(result)) {
-      const { status, message } = mapErrorToHttp(result.error);
-      throw new HttpException(message, status);
-    }
-    return result.value;
+    return this.createCustomerUseCase.execute(dto);
   }
 
   @Get(':id')
