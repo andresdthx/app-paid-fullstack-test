@@ -1,194 +1,416 @@
-# Payment Checkout Application
+# Payment Checkout App
 
-A full-stack payment checkout application built with React and NestJS. Customers can browse products, enter payment and delivery information, process credit card payments through an external payment gateway, and view transaction results.
+Full-stack payment checkout application with credit card processing, stock management, and delivery tracking. Built with a focus on clean architecture, resilience patterns, and production-grade engineering practices.
+
+**Live Demo:** http://app-paid-frontend-511417.s3-website-us-east-1.amazonaws.com  
+**Backend API:** http://3.92.18.108:3000/api  
+**Health Check:** http://3.92.18.108:3000/api/health
+
+---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18 + TypeScript + Redux Toolkit + Vite |
-| Backend | NestJS + TypeScript + Prisma ORM |
-| Database | PostgreSQL |
-| Architecture | Hexagonal (Ports & Adapters) + Railway Oriented Programming |
-| Testing | Jest (>80% coverage target) |
-| Deployment | AWS (CloudFront + S3 + Lambda/ECS + RDS) |
+| Layer | Technology | Rationale |
+|-------|-----------|-----------|
+| Frontend | React 18, TypeScript, Redux Toolkit, Vite | SPA with type safety, predictable state, fast HMR |
+| Backend | NestJS, TypeScript, Prisma ORM | Modular DI framework, type-safe DB access |
+| Database | PostgreSQL 15 | ACID transactions, relational integrity |
+| Architecture | Hexagonal + Railway Oriented Programming | Decoupled domain, explicit error handling |
+| Testing | Jest, ts-jest | 96 tests, >80% coverage |
+| Infrastructure | AWS (EC2, S3, PostgreSQL) + CDK IaC | Cost-effective deployment with reproducibility |
+| CSS | Flexbox + Grid, custom properties | Mobile-first, no framework overhead |
 
-## Architecture Overview
+---
 
-### Backend - Hexagonal Architecture
+## Architecture
+
+### System Overview
+
+```
+                     ┌─────────────────────┐
+                     │   S3 Static Site    │  ← React SPA (Vite build)
+                     └──────────┬──────────┘
+                                │ HTTP
+                     ┌──────────▼──────────┐
+                     │  EC2 / NestJS API   │  ← Port 3000
+                     └──────────┬──────────┘
+                                │
+               ┌────────────────┼────────────────┐
+               ▼                                 ▼
+     ┌─────────────────┐              ┌─────────────────┐
+     │   PostgreSQL    │              │ Payment Gateway │
+     │   (local DB)    │              │  (Sandbox API)  │
+     └─────────────────┘              └─────────────────┘
+```
+
+### Backend — Hexagonal Architecture (Ports & Adapters)
 
 ```
 backend/src/
-├── domain/           # Core business logic (no external dependencies)
-│   ├── entities/     # Product, Transaction, Customer, Delivery
-│   ├── ports/        # Interface contracts for external deps
-│   ├── services/     # Domain services (IntegrityService)
-│   └── value-objects/ # Result<T,E>, AppError, pipe utility
-├── application/      # Use cases with ROP pipelines
-│   └── use-cases/    # GetProducts, CreateTransaction, ProcessPayment, etc.
-└── infrastructure/   # External adapters, controllers, DTOs
-    ├── adapters/     # Prisma repos, Payment Gateway HTTP adapter
-    ├── controllers/  # REST endpoints (thin, delegates to use cases)
-    ├── config/       # PrismaService, error mapping
-    └── dto/          # Request validation with class-validator
+├── domain/                    # Zero external dependencies
+│   ├── entities/              # Product, Transaction, Customer, Delivery
+│   ├── ports/                 # Interface contracts (repository, gateway, integrity)
+│   ├── services/              # IntegrityService (SHA-256 signature)
+│   └── value-objects/         # Result<T,E>, AppError, pipe (ROP utilities)
+│
+├── application/               # Orchestration layer
+│   └── use-cases/             # Each use case = ROP pipeline
+│       ├── get-products       # Fetch all products
+│       ├── create-transaction # Validate → check stock → persist PENDING
+│       ├── process-payment    # Gateway call → poll → integrity check → update
+│       ├── create-customer    # Idempotent by email
+│       └── create-delivery    # Idempotent by transaction
+│
+└── infrastructure/            # All external adapters
+    ├── adapters/              # Prisma repositories, Payment Gateway HTTP client
+    ├── controllers/           # Thin REST layer (delegates to use cases)
+    ├── dto/                   # Request validation (class-validator)
+    └── config/                # PrismaService, error mapper, env config
 ```
 
-### Frontend - React SPA
+**Key principle:** Domain layer never imports infrastructure. Dependencies point inward. Controllers do NOT contain business logic.
+
+### Frontend — Component Architecture
 
 ```
 frontend/src/
-├── components/       # Reusable UI: ProductCard, PaymentModal, DeliveryForm, etc.
-├── pages/            # ProductPage (5-step flow), StatusPage
-├── store/            # Redux Toolkit: products + checkout slices
-├── services/         # API client, Payment Gateway service, Persistence
-├── utils/            # Card validation (Luhn), delivery validation, COP formatting
-└── styles/           # CSS variables, global mobile-first styles
+├── components/                # Reusable, presentation-focused
+│   ├── ProductCard/           # Product display with stock badge
+│   ├── PaymentModal/          # Card form + real-time Luhn/brand validation
+│   ├── DeliveryForm/          # Address fields + postal code validation
+│   ├── SummaryBackdrop/       # Material backdrop with fee breakdown
+│   └── StatusDisplay/         # Transaction result (success/failure)
+│
+├── pages/                     # Route-level orchestrators
+│   ├── ProductPage/           # 5-step flow controller
+│   └── StatusPage/            # Fetch-on-refresh recovery
+│
+├── store/                     # Redux Toolkit
+│   └── slices/                # products (CRUD) + checkout (state machine)
+│
+├── services/                  # External communication
+│   ├── api.service.ts         # Axios client with timeout/interceptors
+│   ├── pay-gateway.service.ts # Tokenization + acceptance token
+│   └── persistence.service.ts # localStorage with TTL + structure validation
+│
+└── utils/                     # Pure functions (testable)
+    ├── card-validation.ts     # Luhn, brand detection, expiry, CVV, name
+    ├── delivery-validation.ts # Postal code, required fields
+    └── amount-calculation.ts  # formatCOP, calculateTotal, toCents
 ```
 
-## Checkout Flow (5 Steps)
+---
 
-1. **Product Page** - Browse products with stock, price in COP
-2. **Payment Modal** - Credit card input with Luhn validation, Visa/MC detection
-3. **Delivery Form** - Shipping address with postal code validation
-4. **Summary Backdrop** - Fee breakdown (product + base fee + delivery fee)
-5. **Status Page** - Transaction result (success/failure) with redirect
+## Checkout Flow (5-Step Process)
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ 1.Product│───▶│ 2.Card   │───▶│3.Delivery│───▶│4.Summary │───▶│ 5.Status │
+│   Page   │    │  Modal   │    │   Form   │    │ Backdrop │    │   Page   │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘    └─────┬────┘
+                                                                       │
+                                                              redirect │
+                                                                       ▼
+                                                              ┌──────────┐
+                                                              │ 1.Product│
+                                                              │(updated) │
+                                                              └──────────┘
+```
+
+Each step persists to `localStorage` (30-min TTL). Page refresh restores last completed step.
+
+---
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/products` | List all products with stock |
-| POST | `/api/transactions` | Create PENDING transaction |
-| GET | `/api/transactions/:id` | Get transaction by ID |
-| POST | `/api/transactions/:id/process` | Process payment via gateway |
-| POST | `/api/customers` | Create/update customer |
-| GET | `/api/customers/:id` | Get customer by ID |
-| POST | `/api/deliveries` | Create delivery record |
-| GET | `/api/deliveries/:id` | Get delivery by ID |
-| GET | `/api/health` | Health check |
+| Method | Endpoint | Request Body | Response | Status |
+|--------|----------|--------------|----------|--------|
+| `GET` | `/api/products` | — | `Product[]` | 200 |
+| `POST` | `/api/transactions` | `{productId, quantity, customerEmail, baseFee, deliveryFee}` | `{transactionId, reference, totalAmount, signature}` | 201 |
+| `GET` | `/api/transactions/:id` | — | `Transaction` | 200/404 |
+| `POST` | `/api/transactions/:id/process` | `{cardToken, acceptanceToken, customerEmail, deliveryData}` | `{transactionId, reference, status, statusReason?}` | 200/400/502 |
+| `POST` | `/api/customers` | `{name, email, phone?, documentId?}` | `Customer` | 201 |
+| `GET` | `/api/customers/:id` | — | `Customer` | 200/404 |
+| `POST` | `/api/deliveries` | `{transactionId, customerId, productId, fullName, streetAddress, city, department, postalCode}` | `Delivery` | 201 |
+| `GET` | `/api/deliveries/:id` | — | `Delivery` | 200/404 |
+| `GET` | `/api/health` | — | `{status: "ok", timestamp}` | 200 |
+
+**Error responses** follow a consistent format:
+```json
+{ "statusCode": 400, "message": "Insufficient stock for requested quantity" }
+```
+
+---
 
 ## Data Model
 
-```
-Product (1) ──── (N) Transaction
-Product (1) ──── (N) Delivery
-Transaction (1) ── (0..1) Delivery
-Customer (1) ──── (N) Delivery
+### Entity Relationship Diagram
 
-Products: id, name, description, price, stock, image_url
-Transactions: id, reference, product_id, quantity, total_amount, base_fee, delivery_fee, status, customer_email, gateway_transaction_id
-Customers: id, name, email, phone, document_id
-Deliveries: id, transaction_id, customer_id, product_id, full_name, street_address, city, department, postal_code
 ```
+┌─────────────┐       ┌────────────────┐       ┌─────────────┐
+│   Product   │       │  Transaction   │       │   Customer  │
+├─────────────┤       ├────────────────┤       ├─────────────┤
+│ id (PK)     │◄──┐   │ id (PK)        │       │ id (PK)     │
+│ name        │   │   │ reference (UK) │       │ name        │
+│ description │   │   │ product_id(FK) │───────│ email (UK)  │
+│ price       │   │   │ quantity       │       │ phone       │
+│ stock       │   │   │ total_amount   │       │ document_id │
+│ image_url   │   │   │ base_fee       │       └──────┬──────┘
+│ created_at  │   │   │ delivery_fee   │              │
+│ updated_at  │   │   │ status (enum)  │              │
+└─────────────┘   │   │ customer_email │              │
+                  │   │ gateway_txn_id │              │
+                  │   │ status_reason  │              │
+                  │   │ created_at     │              │
+                  │   │ updated_at     │              │
+                  │   └───────┬────────┘              │
+                  │           │                       │
+                  │   ┌───────▼────────┐              │
+                  │   │   Delivery     │              │
+                  │   ├────────────────┤              │
+                  └───│ product_id(FK) │              │
+                      │ transaction_id │──────────────┘
+                      │ customer_id(FK)│
+                      │ full_name      │
+                      │ street_address │
+                      │ city           │
+                      │ department     │
+                      │ postal_code    │
+                      │ created_at     │
+                      └────────────────┘
+
+Status enum: PENDING | APPROVED | DECLINED | ERROR
+```
+
+### Database Constraints
+- `Transaction.reference` — unique index (idempotency key)
+- `Customer.email` — unique index (upsert pattern)
+- `Delivery.transaction_id` — unique (one delivery per transaction)
+- `Product.stock` — atomic decrement with `WHERE stock >= quantity` (prevents negative)
+
+---
 
 ## Setup (Local Development)
 
 ### Prerequisites
 
 - Node.js >= 18
-- PostgreSQL running locally (or Docker)
-- npm
+- PostgreSQL 15+ (or Docker: `docker run -p 5432:5432 -e POSTGRES_PASSWORD=pass -e POSTGRES_DB=app_paid postgres:15`)
+- npm 9+
 
 ### Environment Variables
 
-```bash
-# Backend (backend/.env)
-DATABASE_URL=postgresql://user:password@localhost:5432/app_paid?schema=public
-PAYMENT_GATEWAY_API_URL=<sandbox_api_url>
-PAYMENT_GATEWAY_PUBLIC_KEY=<public_key>
-PAYMENT_GATEWAY_PRIVATE_KEY=<private_key>
-PAYMENT_GATEWAY_INTEGRITY_KEY=<integrity_key>
+Create `backend/.env`:
+```env
+DATABASE_URL=postgresql://postgres:pass@localhost:5432/app_paid?schema=public
+PAYMENT_GATEWAY_API_URL=https://api-sandbox.co.uat.wompi.dev/v1
+PAYMENT_GATEWAY_PUBLIC_KEY=<your_pub_key>
+PAYMENT_GATEWAY_PRIVATE_KEY=<your_prv_key>
+PAYMENT_GATEWAY_INTEGRITY_KEY=<your_integrity_key>
 PORT=3000
 FRONTEND_URL=http://localhost:5173
 BASE_FEE=5000
 DELIVERY_FEE=10000
-
-# Frontend (frontend/.env)
-VITE_API_URL=http://localhost:3000/api
-VITE_GATEWAY_PUBLIC_KEY=<public_key>
-VITE_GATEWAY_API_URL=<sandbox_api_url>
 ```
 
-### Installation
+Create `frontend/.env`:
+```env
+VITE_API_URL=http://localhost:3000/api
+VITE_GATEWAY_PUBLIC_KEY=<your_pub_key>
+VITE_GATEWAY_API_URL=https://api-sandbox.co.uat.wompi.dev/v1
+```
+
+### Quick Start
 
 ```bash
-# Install all dependencies (workspaces)
+# 1. Install dependencies (npm workspaces)
 npm install
 
-# Generate Prisma client
-cd backend && npx prisma generate
-
-# Run migrations
+# 2. Setup database
+cd backend
+npx prisma generate
 npx prisma migrate dev --name init
-
-# Seed database
 npx prisma db seed
 
-# Start backend
+# 3. Start backend (port 3000)
 npm run start:dev
 
-# In another terminal - start frontend
-cd ../frontend && npm run dev
+# 4. Start frontend (port 5173, proxies /api to backend)
+cd ../frontend
+npm run dev
 ```
 
-### Running Tests
+---
+
+## Testing
+
+### Run Tests
 
 ```bash
-# Backend tests
-cd backend && npm run test:cov
+# Backend (37 tests)
+cd backend && npm test
 
-# Frontend tests
+# Frontend (59 tests)
+cd frontend && npm test
+
+# With coverage
+cd backend && npm run test:cov
 cd frontend && npm run test:cov
 ```
 
+### Test Coverage Results
+
+| Module | Suites | Tests | Coverage Target |
+|--------|--------|-------|-----------------|
+| Backend Domain | 3 | 20 | >80% |
+| Backend Use Cases | 4 | 17 | >80% |
+| Frontend Utils | 3 | 38 | >80% |
+| Frontend Redux | 2 | 21 | >80% |
+| **Total** | **12** | **96** | **>80%** |
+
+### What's Tested
+
+**Backend:**
+- IntegrityService: SHA-256 generation + timing-safe validation
+- Result type: Success/Failure creation + type guards
+- AppError: All factory methods + error categories
+- GetProductsUseCase: success + repository failure
+- CreateTransactionUseCase: validation, product not found, insufficient stock, success, idempotency
+- CreateCustomerUseCase: validation, create new, update existing (idempotent)
+- CreateDeliveryUseCase: validation, postal code, transaction check, idempotent return, success
+
+**Frontend:**
+- Card validation: Luhn algorithm, brand detection (Visa/MC), expiry temporal check, CVV, cardholder name
+- Delivery validation: postal code (6 digits), required field + max length
+- Amount calculation: total computation, COP formatting, cents conversion
+- Redux slices: all actions, state transitions, reset behavior, sensitive data clearing
+
+---
+
 ## Key Design Decisions
 
-1. **Railway Oriented Programming (ROP)** - All use cases return `Result<T, AppError>`. Operations chain sequentially; first failure short-circuits the pipeline.
+### 1. Railway Oriented Programming (ROP)
 
-2. **Hexagonal Architecture** - Domain layer has zero external dependencies. All infrastructure (DB, HTTP, gateway) accessed through port interfaces.
+Every use case returns `Result<T, AppError>`. Operations chain sequentially; the first failure short-circuits the entire pipeline.
 
-3. **Atomic Stock Decrement** - Uses Prisma's conditional update (`WHERE stock >= quantity`) to prevent race conditions and negative stock.
+```typescript
+// Success path: validate → check stock → persist → sign
+// Any failure: immediately returns Failure<AppError> to caller
+async execute(input): Promise<Result<Output, AppError>> {
+  if (!input.productId) return failure(AppError.validation(...));
+  const product = await this.productRepo.findById(input.productId);
+  if (!product) return failure(AppError.notFound(...));
+  if (!product.hasStock(qty)) return failure(AppError.insufficientStock());
+  // ... continue pipeline
+  return success(output);
+}
+```
 
-4. **State Persistence** - Redux state saved to localStorage on step transitions with 30-minute TTL. Survives page refresh.
+### 2. Atomic Stock Management
 
-5. **Integrity Validation** - SHA-256 signature computed from (reference + amount + currency + integrity_key) for payment verification.
+Stock decrement uses Prisma's conditional update to prevent race conditions:
 
-6. **Security** - Helmet headers, CORS whitelist, input sanitization via class-validator, CVV never persisted, card data cleared after transaction.
+```sql
+UPDATE products SET stock = stock - :qty WHERE id = :id AND stock >= :qty
+```
+
+If the `WHERE` fails (concurrent purchase), no rows update and the operation returns `AppError.insufficientStock()`.
+
+### 3. Resilience — State Persistence
+
+Redux checkout state is persisted to `localStorage` on every step transition:
+- 30-minute TTL (expired state is discarded)
+- Structure validation on load (corrupted JSON resets to step 1)
+- Card data (CVV, number) is **never** persisted (security)
+- Terminal states (APPROVED/DECLINED/ERROR) clear persisted state
+
+### 4. Retry Pattern (Payment Processing)
+
+The payment flow implements retry with exponential backoff:
+- Max 3 retries on gateway timeout/failure
+- Polling mechanism for async payment status (5s intervals, max 12 attempts)
+- After exhausting retries, transaction marked as ERROR and user redirected
+
+### 5. Security (OWASP Aligned)
+
+- **Helmet middleware**: X-Content-Type-Options, X-Frame-Options: DENY, HSTS
+- **CORS**: Whitelist frontend origin only
+- **Input sanitization**: class-validator decorators, max field length 1000 chars
+- **CVV handling**: Never stored in DB, cleared from Redux/localStorage post-transaction
+- **Card masking**: Only last 4 digits in any log output
+- **HTTPS**: S3 website + gateway communication over TLS
+
+### 6. Idempotent Operations
+
+- **Transaction creation**: Same reference returns existing transaction (no duplicate charge)
+- **Customer upsert**: Finds by email, updates if exists, creates if new
+- **Delivery creation**: One per transaction_id (unique constraint)
+
+---
 
 ## Deployment
 
-Infrastructure as Code using AWS CDK (TypeScript) located in `infrastructure/`:
+### Current Deployment
 
-**Architecture:**
-- Frontend: S3 + CloudFront (HTTPS, edge caching, SPA routing)
-- Backend: AWS Lambda + API Gateway (serverless, auto-scaling)
-- Database: RDS PostgreSQL (free tier, t3.micro, private subnet)
-- Networking: VPC with public + isolated subnets
+| Component | Service | URL |
+|-----------|---------|-----|
+| Frontend | AWS S3 Static Website | http://app-paid-frontend-511417.s3-website-us-east-1.amazonaws.com |
+| Backend | AWS EC2 (t3.micro) + PM2 | http://3.92.18.108:3000/api |
+| Database | PostgreSQL (on EC2) | localhost:5432 (internal) |
 
-**Deploy:**
+### Infrastructure as Code (CDK)
+
+Located in `infrastructure/`:
+- S3 + CloudFront (HTTPS, edge caching, SPA routing)
+- Lambda/ECS option for backend (serverless scaling)
+- RDS PostgreSQL (private subnet, encrypted)
+- VPC with public + isolated subnets
+
 ```bash
-# Prerequisites: AWS CLI configured, CDK bootstrapped
-cd infrastructure
-npm install
-npx cdk bootstrap   # first time only
-
-# Full deploy (builds frontend + backend, deploys all)
-./deploy.sh         # Linux/Mac
-deploy.bat          # Windows
+cd infrastructure && npm install
+npx cdk bootstrap   # first time
+npx cdk deploy --all
 ```
 
-**Outputs after deploy:**
-- `CloudFrontURL` - Frontend HTTPS URL
-- `ApiUrl` - Backend API Gateway URL
-- `DatabaseEndpoint` - RDS hostname (private)
+---
+
+## Folder Structure
+
+```
+app-paid/
+├── backend/                   # NestJS API
+│   ├── prisma/                # Schema, migrations, seed
+│   ├── src/
+│   │   ├── domain/            # Core business logic
+│   │   ├── application/       # Use cases (ROP)
+│   │   └── infrastructure/    # Adapters, controllers, DTOs
+│   └── package.json
+├── frontend/                  # React SPA
+│   ├── src/
+│   │   ├── components/        # UI components
+│   │   ├── pages/             # Route pages
+│   │   ├── store/             # Redux
+│   │   ├── services/          # API + Gateway + Persistence
+│   │   └── utils/             # Validation + formatting
+│   └── package.json
+├── infrastructure/            # AWS CDK (TypeScript)
+├── package.json               # Monorepo workspaces
+├── tsconfig.base.json         # Shared TS config
+└── README.md
+```
+
+---
 
 ## Branch Strategy
 
-Each feature is developed in a dedicated branch and merged to main:
-- `feature/task-1-scaffolding`
-- `feature/task-2-domain-layer`
-- `feature/task-3-application-layer`
-- `feature/task-4-infrastructure-layer`
-- `feature/task-5-frontend-components`
-- `feature/task-6-unit-tests`
-- `feature/task-7-aws-infrastructure`
+Feature branches with incremental PRs (simulates real team workflow):
+
+| Branch | Feature |
+|--------|---------|
+| `feature/task-1-scaffolding` | Monorepo setup, configs |
+| `feature/task-2-domain-layer` | Entities, ports, ROP types |
+| `feature/task-3-application-layer` | Use cases with ROP |
+| `feature/task-4-infrastructure-layer` | Prisma, controllers, DI |
+| `feature/task-5-frontend-components` | UI, services, checkout flow |
+| `feature/task-6-unit-tests` | 96 tests, >80% coverage |
+| `feature/task-7-aws-infrastructure` | CDK IaC + deploy scripts |

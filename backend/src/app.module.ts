@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 
 // Config
 import { PrismaService } from './infrastructure/config/prisma.service';
+import { RequestLoggerMiddleware } from './infrastructure/config/request-logger.middleware';
 
 // Use Cases
 import {
@@ -71,4 +72,8 @@ import { DeliveryController } from './infrastructure/controllers/delivery.contro
     CreateDeliveryUseCase,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}

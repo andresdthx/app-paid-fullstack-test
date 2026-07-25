@@ -1,4 +1,4 @@
-import { Injectable, HttpException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import {
   PaymentGatewayPort,
@@ -9,6 +9,11 @@ import {
 } from '../../domain/ports';
 import { Result, success, failure, AppError } from '../../domain/value-objects';
 import { firstValueFrom } from 'rxjs';
+import { timeout, retry } from 'rxjs/operators';
+
+const TIMEOUT_MS = 30000;
+const RETRY_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 1000;
 
 @Injectable()
 export class PayGatewayAdapter implements PaymentGatewayPort {
@@ -27,7 +32,11 @@ export class PayGatewayAdapter implements PaymentGatewayPort {
       const response = await firstValueFrom(
         this.httpClient.post(`${this.apiUrl}/tokens/cards`, cardData, {
           headers: { Authorization: `Bearer ${this.publicKey}` },
-        }),
+          timeout: TIMEOUT_MS,
+        }).pipe(
+          timeout(TIMEOUT_MS),
+          retry({ count: RETRY_ATTEMPTS, delay: RETRY_DELAY_MS }),
+        ),
       );
       const data = response.data.data;
       return success({
@@ -36,14 +45,20 @@ export class PayGatewayAdapter implements PaymentGatewayPort {
         lastFour: data.last_four,
       });
     } catch (error) {
-      return failure(AppError.externalService('Card tokenization failed'));
+      const message = this.extractErrorMessage(error, 'Card tokenization failed');
+      return failure(AppError.externalService(message));
     }
   }
 
   async getAcceptanceToken(): Promise<Result<string, AppError>> {
     try {
       const response = await firstValueFrom(
-        this.httpClient.get(`${this.apiUrl}/merchants/${this.publicKey}`),
+        this.httpClient.get(`${this.apiUrl}/merchants/${this.publicKey}`, {
+          timeout: TIMEOUT_MS,
+        }).pipe(
+          timeout(TIMEOUT_MS),
+          retry({ count: RETRY_ATTEMPTS, delay: RETRY_DELAY_MS }),
+        ),
       );
       return success(response.data.data.presigned_acceptance.acceptance_token);
     } catch (error) {
@@ -71,9 +86,10 @@ export class PayGatewayAdapter implements PaymentGatewayPort {
           },
           {
             headers: { Authorization: `Bearer ${this.privateKey}` },
-            timeout: 30000,
+            timeout: TIMEOUT_MS,
           },
-        ),
+        ).pipe(timeout(TIMEOUT_MS)),
+        // No retry on payment creation to avoid double-charging
       );
       const data = response.data.data;
       return success({
@@ -84,7 +100,8 @@ export class PayGatewayAdapter implements PaymentGatewayPort {
         currency: data.currency,
       });
     } catch (error) {
-      return failure(AppError.externalService('Payment creation failed'));
+      const message = this.extractErrorMessage(error, 'Payment creation failed');
+      return failure(AppError.externalService(message));
     }
   }
 
@@ -93,8 +110,11 @@ export class PayGatewayAdapter implements PaymentGatewayPort {
       const response = await firstValueFrom(
         this.httpClient.get(`${this.apiUrl}/transactions/${transactionId}`, {
           headers: { Authorization: `Bearer ${this.publicKey}` },
-          timeout: 30000,
-        }),
+          timeout: TIMEOUT_MS,
+        }).pipe(
+          timeout(TIMEOUT_MS),
+          retry({ count: RETRY_ATTEMPTS, delay: RETRY_DELAY_MS }),
+        ),
       );
       const data = response.data.data;
       return success({
@@ -107,5 +127,19 @@ export class PayGatewayAdapter implements PaymentGatewayPort {
     } catch (error) {
       return failure(AppError.externalService('Failed to get transaction status'));
     }
+  }
+
+  private extractErrorMessage(error: unknown, fallback: string): string {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const response = (error as any).response;
+      if (response?.data?.error?.messages) {
+        const messages = response.data.error.messages;
+        return Object.values(messages).flat().join('; ') || fallback;
+      }
+      if (response?.data?.message) {
+        return response.data.message;
+      }
+    }
+    return fallback;
   }
 }
