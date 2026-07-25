@@ -119,6 +119,19 @@ frontend/src/
 
 Each step persists to `localStorage` (30-min TTL). Page refresh restores last completed step.
 
+### Test Card Data (Sandbox)
+
+Use the following card for testing approved transactions:
+
+| Field | Value |
+|-------|-------|
+| Card Number | `4242 4242 4242 4242` |
+| Cardholder Name | Any name (e.g. `John Doe`) |
+| Expiry | Any future date (e.g. `12/30`) |
+| CVV | Any 3 digits (e.g. `123`) |
+
+This card always results in an **APPROVED** transaction in the sandbox environment.
+
 ---
 
 ## API Endpoints
