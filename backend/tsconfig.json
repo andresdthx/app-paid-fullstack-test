@@ -13,6 +13,7 @@
     },
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
+    "strictPropertyInitialization": false,
     "target": "ES2021",
     "lib": ["ES2021"],
     "incremental": true,
