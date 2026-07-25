@@ -49,7 +49,9 @@ function ProductPage() {
           deliveryFee={checkout.fees.deliveryFee}
           loading={checkout.loading}
           error={checkout.error}
+          retryCount={checkout.retryCount}
           onPay={processPayment}
+          onCancel={reset}
         />
       </div>
     );

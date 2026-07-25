@@ -9,7 +9,9 @@ interface SummaryBackdropProps {
   deliveryFee: number;
   loading: boolean;
   error?: string | null;
+  retryCount?: number;
   onPay: () => void;
+  onCancel?: () => void;
 }
 
 function SummaryBackdrop({
@@ -20,11 +22,13 @@ function SummaryBackdrop({
   deliveryFee,
   loading,
   error,
+  retryCount = 0,
   onPay,
+  onCancel,
 }: SummaryBackdropProps) {
   const productAmount = productPrice * quantity;
   const total = calculateTotal(productPrice, quantity, baseFee, deliveryFee);
-  const isDisabled = loading || !!error;
+  const maxRetriesReached = retryCount >= 3;
 
   return (
     <div className="backdrop-overlay">
@@ -50,15 +54,39 @@ function SummaryBackdrop({
           </div>
         </div>
 
-        {error && <p className="backdrop__error">{error}</p>}
+        {error && (
+          <div className="backdrop__error-container" role="alert" aria-live="assertive">
+            <p className="backdrop__error">{error}</p>
+            {!maxRetriesReached && (
+              <p className="backdrop__retry-hint">
+                Attempt {retryCount}/3 — Click below to retry
+              </p>
+            )}
+          </div>
+        )}
 
-        <button
-          className="backdrop__pay-button"
-          onClick={onPay}
-          disabled={isDisabled}
-        >
-          {loading ? 'Processing...' : 'Confirm Payment'}
-        </button>
+        <div className="backdrop__actions">
+          <button
+            className="backdrop__pay-button"
+            onClick={onPay}
+            disabled={loading || maxRetriesReached}
+          >
+            {loading ? 'Processing...' : error ? 'Retry Payment' : 'Confirm Payment'}
+          </button>
+
+          {onCancel && (
+            <button className="backdrop__cancel-button" onClick={onCancel} disabled={loading}>
+              Cancel
+            </button>
+          )}
+        </div>
+
+        <div className="backdrop__security-badge">
+          <span className="backdrop__lock-icon">&#128274;</span>
+          <span className="backdrop__security-text">
+            Secure payment — Card data encrypted via TLS
+          </span>
+        </div>
       </div>
     </div>
   );
