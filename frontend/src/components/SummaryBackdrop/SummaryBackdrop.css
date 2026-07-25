@@ -1,0 +1,95 @@
+.backdrop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 900;
+}
+
+.backdrop {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  width: 100%;
+  max-width: 600px;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.backdrop__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-lg);
+}
+
+.backdrop__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.backdrop__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+}
+
+.backdrop__item--total {
+  border-top: 2px solid var(--color-border);
+  padding-top: var(--spacing-md);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.backdrop__label {
+  color: var(--color-text-secondary);
+}
+
+.backdrop__value {
+  font-weight: 600;
+}
+
+.backdrop__pay-button {
+  width: 100%;
+  padding: var(--spacing-md);
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.backdrop__pay-button:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.backdrop__pay-button:disabled {
+  background: var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+
+.backdrop__error {
+  color: var(--color-error);
+  font-size: var(--font-size-label);
+  text-align: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+@media (min-width: 750px) {
+  .backdrop-overlay {
+    align-items: center;
+  }
+  .backdrop {
+    border-radius: var(--radius-lg);
+  }
+}
