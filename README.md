@@ -157,11 +157,30 @@ cd frontend && npm run test:cov
 
 ## Deployment
 
-Infrastructure as Code using AWS CDK (TypeScript):
-- Frontend: S3 + CloudFront (HTTPS, edge caching)
-- Backend: Lambda or ECS behind API Gateway
-- Database: RDS PostgreSQL
-- All accessible via HTTPS at stable URL
+Infrastructure as Code using AWS CDK (TypeScript) located in `infrastructure/`:
+
+**Architecture:**
+- Frontend: S3 + CloudFront (HTTPS, edge caching, SPA routing)
+- Backend: AWS Lambda + API Gateway (serverless, auto-scaling)
+- Database: RDS PostgreSQL (free tier, t3.micro, private subnet)
+- Networking: VPC with public + isolated subnets
+
+**Deploy:**
+```bash
+# Prerequisites: AWS CLI configured, CDK bootstrapped
+cd infrastructure
+npm install
+npx cdk bootstrap   # first time only
+
+# Full deploy (builds frontend + backend, deploys all)
+./deploy.sh         # Linux/Mac
+deploy.bat          # Windows
+```
+
+**Outputs after deploy:**
+- `CloudFrontURL` - Frontend HTTPS URL
+- `ApiUrl` - Backend API Gateway URL
+- `DatabaseEndpoint` - RDS hostname (private)
 
 ## Branch Strategy
 
@@ -171,3 +190,5 @@ Each feature is developed in a dedicated branch and merged to main:
 - `feature/task-3-application-layer`
 - `feature/task-4-infrastructure-layer`
 - `feature/task-5-frontend-components`
+- `feature/task-6-unit-tests`
+- `feature/task-7-aws-infrastructure`
