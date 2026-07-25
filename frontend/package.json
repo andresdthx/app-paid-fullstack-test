@@ -47,7 +47,6 @@
     "moduleNameMapper": {
       "\\.(css|less|scss)$": "identity-obj-proxy"
     },
-    "setupFilesAfterFramework": [],
     "testRegex": ".*\\.spec\\.tsx?$"
   }
 }
