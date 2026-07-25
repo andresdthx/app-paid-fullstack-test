@@ -1,7 +1,20 @@
 import { Transaction, TransactionStatus } from '../entities';
 
+export interface CreateTransactionData {
+  reference: string;
+  productId: string;
+  quantity: number;
+  totalAmount: number;
+  baseFee: number;
+  deliveryFee: number;
+  status: TransactionStatus;
+  customerEmail: string;
+  gatewayTransactionId?: string;
+  statusReason?: string;
+}
+
 export interface TransactionRepositoryPort {
-  create(transaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>): Promise<Transaction>;
+  create(data: CreateTransactionData): Promise<Transaction>;
   findById(id: string): Promise<Transaction | null>;
   findByReference(reference: string): Promise<Transaction | null>;
   updateStatus(

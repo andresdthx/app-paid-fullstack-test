@@ -1,7 +1,18 @@
 import { Delivery } from '../entities';
 
+export interface CreateDeliveryData {
+  transactionId: string;
+  customerId: string;
+  productId: string;
+  fullName: string;
+  streetAddress: string;
+  city: string;
+  department: string;
+  postalCode: string;
+}
+
 export interface DeliveryRepositoryPort {
-  create(delivery: Omit<Delivery, 'id' | 'createdAt'>): Promise<Delivery>;
+  create(data: CreateDeliveryData): Promise<Delivery>;
   findByTransactionId(transactionId: string): Promise<Delivery | null>;
   findById(id: string): Promise<Delivery | null>;
 }
